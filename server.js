@@ -25,6 +25,11 @@ app.use(bodyParser.json({ limit: '50mb' })); // High limit for Base64 photos
 app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'frontend')));
 
+// [NEW] Explicitly serve index.html for root route (Fixes Render 404)
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'frontend', 'index.html'));
+});
+
 // Data Paths
 const DATA_DIR = path.join(__dirname, 'data');
 const FILES = {
@@ -66,43 +71,77 @@ const writeData = (file, data) => {
     }
 };
 
-// Helper: Send Email (Real Implementation)
+// Helper: Send Email (Robust Implementation)
 const sendEmail = async (to, subject, text) => {
-    // SECURITY NOTE: In a real environment, use environment variables (process.env.EMAIL_USER)
-    // For this specific setup, please manually enter your credentials below.
-    const transporter = nodemailer.createTransport({
-        service: 'gmail', // or 'outlook', 'yahoo', or use host/port for custom SMTP
-        auth: {
-            user: 'sarveshwara674@gmail.com', // <--- REPLACE THIS
-            pass: 'hafs mopr pykw wqfv'     // <--- REPLACE THIS (Use App Password for Gmail)
-        }
-    });
+    console.log(`[EMAIL] Attempting to send to ${to}...`);
 
-    // Verify SMTP connection on startup (Debug)
-    transporter.verify((error, success) => {
-        if (error) {
-            console.error('[EMAIL SETUP ERROR] Connection Failed:', error);
-        } else {
-            console.log('[EMAIL SETUP SUCCESS] SMTP Server Ready!');
+    // Config: Prefer Env Vars, fallback to hardcoded (User provided)
+    const storeEmail = process.env.EMAIL_USER || 'sarveshwara674@gmail.com';
+    const storePass = process.env.EMAIL_PASS || 'hafs mopr pykw wqfv';
+
+    const transporter = nodemailer.createTransport({
+        host: "smtp.gmail.com",
+        port: 465,
+        secure: true, // Use SSL
+        auth: {
+            user: storeEmail,
+            pass: storePass
         }
     });
 
     const mailOptions = {
-        from: 'onlinevoting@demo.com',
+        from: `"Online Voting" <${storeEmail}>`,
         to: to,
         subject: subject,
         text: text
     };
 
     try {
-        await transporter.sendMail(mailOptions);
-        console.log(`[EMAIL SENT] To: ${to}`);
+        const info = await transporter.sendMail(mailOptions);
+        console.log(`[EMAIL SUCCESS] MessageId: ${info.messageId}`);
         return true;
     } catch (error) {
-        console.error('[EMAIL ERROR]', error);
-        console.log(`[EMAIL FALLBACK - CONSOLE] To: ${to} | Body: ${text}`);
+        console.error('----------------------------------------');
+        console.error('[EMAIL FAILED] Could not send OTP.');
+        console.error('Error Details:', error.message);
+        console.error('Possible Causes:');
+        console.error('1. Invalid App Password.');
+        console.error('2. Gmail blocking sign-in (Check security settings).');
+        console.error('3. Deployment environment blocking SMTP ports.');
+        console.error('----------------------------------------');
         return false;
     }
+};
+
+// Verify SMTP on startup (Non-blocking)
+const verifyTransporter = nodemailer.createTransport({
+    host: "smtp.gmail.com", port: 465, secure: true,
+    auth: { user: process.env.EMAIL_USER || 'sarveshwara674@gmail.com', pass: process.env.EMAIL_PASS || 'hafs mopr pykw wqfv' }
+});
+verifyTransporter.verify((error, success) => {
+    if (error) console.log('[SMTP STATUS] 🔴 Connection Failed:', error.message);
+    else console.log('[SMTP STATUS] 🟢 Server is ready to send emails');
+});
+console.log('[EMAIL SETUP SUCCESS] SMTP Server Ready!');
+        }
+    });
+
+const mailOptions = {
+    from: 'onlinevoting@demo.com',
+    to: to,
+    subject: subject,
+    text: text
+};
+
+try {
+    await transporter.sendMail(mailOptions);
+    console.log(`[EMAIL SENT] To: ${to}`);
+    return true;
+} catch (error) {
+    console.error('[EMAIL ERROR]', error);
+    console.log(`[EMAIL FALLBACK - CONSOLE] To: ${to} | Body: ${text}`);
+    return false;
+}
 };
 
 // --- ROUTES ---
@@ -402,6 +441,16 @@ app.get('/api/candidate/:id', (req, res) => {
         res.json({ success: true, candidate });
     } else {
         res.json({ success: false, message: 'Candidate not found' });
+    }
+});
+
+// [NEW] Catch-all route: Serve index.html for any unknown paths (SPA support)
+app.get('*', (req, res) => {
+    // Only serve index if it's not an API call
+    if (!req.path.startsWith('/api')) {
+        res.sendFile(path.join(__dirname, 'frontend', 'index.html'));
+    } else {
+        res.status(404).json({ success: false, message: 'API Route not found' });
     }
 });
 
