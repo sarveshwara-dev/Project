@@ -122,27 +122,6 @@ verifyTransporter.verify((error, success) => {
     if (error) console.log('[SMTP STATUS] 🔴 Connection Failed:', error.message);
     else console.log('[SMTP STATUS] 🟢 Server is ready to send emails');
 });
-console.log('[EMAIL SETUP SUCCESS] SMTP Server Ready!');
-        }
-    });
-
-const mailOptions = {
-    from: 'onlinevoting@demo.com',
-    to: to,
-    subject: subject,
-    text: text
-};
-
-try {
-    await transporter.sendMail(mailOptions);
-    console.log(`[EMAIL SENT] To: ${to}`);
-    return true;
-} catch (error) {
-    console.error('[EMAIL ERROR]', error);
-    console.log(`[EMAIL FALLBACK - CONSOLE] To: ${to} | Body: ${text}`);
-    return false;
-}
-};
 
 // --- ROUTES ---
 
@@ -442,6 +421,17 @@ app.get('/api/candidate/:id', (req, res) => {
     } else {
         res.json({ success: false, message: 'Candidate not found' });
     }
+});
+
+// [NEW] Health Check
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date(), env: process.env.NODE_ENV });
+});
+
+// [NEW] Global Error Handler (Prevents 502s on unhandled errors)
+app.use((err, req, res, next) => {
+    console.error('[SERVER ERROR]', err);
+    res.status(500).json({ success: false, message: 'Internal Server Error' });
 });
 
 // [NEW] Catch-all route: Serve index.html for any unknown paths (SPA support)
