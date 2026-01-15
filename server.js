@@ -183,12 +183,12 @@ app.post('/api/login', async (req, res) => {
 
             console.log(`[GENERATED OTP] User: ${voter.name} | OTP: ${otp}`);
 
-            // Send Email (don't await indefinitely, or catch error to ensure response)
-            try {
-                await sendEmail(voter.email, 'Voting OTP', `Your OTP is ${otp}`);
-            } catch (err) {
-                console.error("Email send failed inside route:", err);
-            }
+            // Send Email (Fire and Forget - Non-blocking)
+            // We do NOT await this, so the UI gets a response immediately. 
+            // If email fails, the user still sees the Debug OTP in the alert.
+            sendEmail(voter.email, 'Voting OTP', `Your OTP is ${otp}`).catch(err => {
+                console.error("[BACKGROUND EMAIL FAIL]", err);
+            });
 
             // Return OTP in response for debugging (since email might fail on free servers)
             res.json({ success: true, message: 'OTP sent to registered email', debug_otp: otp });
